@@ -34,7 +34,7 @@ def create_insurance(data: InsuranceCreate,db: Session = Depends(get_db)):
         smoker = smoker,
         age = age,
         bmi = bmi,
-        charges = charges
+        charges = float(charges)
     )
     
     db.add(new_insurance)
@@ -46,3 +46,44 @@ def create_insurance(data: InsuranceCreate,db: Session = Depends(get_db)):
 @router.get("/",response_model=list[InsuranceResponse])
 def get_insurance(db: Session = Depends(get_db)):
     return db.query(Insurance).all() # select * from insurance
+
+@router.put("/{insurance_id}", response_model=InsuranceResponse)
+def update_insurance(
+    insurance_id: int,
+    data: InsuranceCreate,
+    db: Session = Depends(get_db)
+):
+    # 1. Buscar el registro existente
+    insurance = db.query(Insurance).filter(Insurance.id == insurance_id).first()
+
+    if not insurance:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+
+    # 2. Recalcular la predicción con los nuevos datos enviados
+    charges = predict_charges(data.smoker, data.age, data.bmi)
+
+    # 3. Actualizar las propiedades del objeto de la base de datos
+    insurance.smoker = data.smoker
+    insurance.age = data.age
+    insurance.bmi = data.bmi
+    insurance.charges = float(charges)
+
+    # 4. Confirmar los cambios en la base de datos
+    db.commit()
+    db.refresh(insurance)
+
+    return insurance
+
+@router.delete("/{insurance_id}")
+def delete_insurance(insurance_id: int, db: Session = Depends(get_db)):
+    # 1. Buscar el registro existente
+    insurance = db.query(Insurance).filter(Insurance.id == insurance_id).first()
+
+    if not insurance:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+
+    # 2. Eliminar de la base de datos
+    db.delete(insurance)
+    db.commit()
+
+    return {"message": "Registro eliminado correctamente"}
